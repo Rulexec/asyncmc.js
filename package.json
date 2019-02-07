@@ -1,0 +1,13 @@
+{
+  "name": "asyncmc",
+  "version": "0.0.1",
+  "description": "",
+  "main": "index.js",
+  "directories": {
+  },
+  "scripts": {
+  },
+  "author": "Alexander Ruliov <alexander.ruliov@gmail.com>",
+  "devDependencies": {
+  }
+}

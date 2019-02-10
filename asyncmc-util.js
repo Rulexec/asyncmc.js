@@ -4,142 +4,94 @@ exports.inject = function(AsyncCoroutine){
 
 var AsyncCoroutineValue = AsyncCoroutine.Value;
 
-AsyncCoroutine.ManualStream = ManualStream;
+AsyncCoroutine.Stream = Stream;
 
-function ManualStream(options) {
-	var self = this;
+function Stream(options) {
+	let onRequest = options && options.onRequest;
 
-	var onFirstRun = options && options.onFirstRun,
-	    onRequestValue = options && options.onRequestValue;
+	const self = this;
 
-	var nextResults = [];
+	let values = [];
+	let error;
+	let isFinished = false;
 
-	let syncData = null;
+	let valueWaiters = [];
 
-	this.feed = function(value, error) {
-		if (!nextResults) {
-			console.error('Stream is ended');
-			return;
-		}
+	let valueRequestedRunning = null;
 
-		if (syncData && !syncData.isFeeded) {
-			syncData.isFeeded = true;
-			syncData.feedValue = value;
-		}
+	function onNewValue() {
+		let oldWaiters = valueWaiters;
+		valueWaiters = [];
 
-		var count = nextResults.length;
+		oldWaiters.forEach(fun => { fun(); });
+	}
 
-		while (count > 0) {
-			var handler = nextResults.shift();
-
-			handler(false, value, error);
-
-			count--;
-		}
-
-		if (error) {
-			nextResults = null;
-		}
+	this.push = function(value) {
+		if (isFinished || error) throw new Error('already_finished');
+		values.push(value);
+		onNewValue();
+	};
+	this.finish = function() {
+		if (error) throw new Error('already_finished');
+		isFinished = true;
+		onNewValue();
+	};
+	this.error = function(err) {
+		if (isFinished) throw new Error('already_finished');
+		error = err;
+		onNewValue();
 	};
 
-	this.end = function() {
-		var oldResults = nextResults;
+	this.getAsyncCoroutine = () => createAsyncCoroutine(0);
 
-		nextResults = null;
+	function createAsyncCoroutine(index) {
+		return new AsyncCoroutine(() => AsyncM.create((onResult, onError) => {
+			handle();
 
-		oldResults.forEach(function(f) {
-			f(true);
-		});
-	};
+			function handle() {
+				if (index < values.length) {
+					let value = values[index];
 
-	this.getAsyncCoroutine = function() {
-		var cor = new AsyncCoroutine(function() {
-			return AsyncM.create(function(onResult, onError) {
-				if (!nextResults) {
+					onResult(new AsyncCoroutineValue(value, createAsyncCoroutine(index + 1)));
+				} else if (error) {
+					onError(error);
+				} else if (isFinished) {
 					onResult(null);
-					return;
-				}
-
-				if (syncData) {
-					syncData.onResult = onResult;
 				} else {
-					if (onRequestValue) {
-						syncData = {
-							onResult: onResult,
-							isFeeded: false,
-							feedValue: null
-						};
+					valueWaiters.push(handle);
 
-						let lastLoopOnResult;
-
-						while (true) {
-							let onSyncResult = syncData.onResult;
-							if (!onSyncResult) break;
-
-							syncData.onResult = null;
-							lastLoopOnResult = onSyncResult;
-
-							onRequestValue(self);
-
-							if (syncData.isFeeded) {
-								lastLoopOnResult = null;
-
-								syncData.isFeeded = false;
-
-								onSyncResult(new AsyncCoroutineValue(syncData.feedValue, cor));
-							}
-
-							if (!nextResults) {
-								lastLoopOnResult = null;
-
-								onSyncResult(null);
-								break;
-							}
-						}
-
-						if (lastLoopOnResult) {
-							nextResults.push(function(isEnd, value, error) {
-								if (error) { onError(error); return; };
-
-								if (isEnd) lastLoopOnResult(null);
-								else lastLoopOnResult(new AsyncCoroutineValue(value, cor));
-							});
-						}
-
-						syncData = null;
-					} else {
-						nextResults.push(function(isEnd, value, error) {
-							if (error) { onError(error); return; };
-
-							if (isEnd) onResult(null);
-							else onResult(new AsyncCoroutineValue(value, cor));
-						});
+					if (onRequest && !valueRequestedRunning) {
+						callOnRequest();
 					}
 				}
+			}
+		}));
+	}
+
+	function callOnRequest() {
+		let sync = true;
+
+		while (true) {
+			valueRequestedRunning = true;
+
+			onRequest().run(() => {
+				if (sync) { sync = false; return; }
+
+				if (valueWaiters.length) callOnRequest();
+				else valueRequestedRunning = false;
+			}, error => {
+				self.error(error);
 			});
-		});
 
-		var firstCor = new AsyncCoroutine(function() {
-			return AsyncM.create(function(onResult) {
-				if (!nextResults) {
-					onResult(null);
-					return;
-				}
+			if (sync) {
+				sync = false;
+				break;
+			}
 
-				nextResults.push(function(isEnd, value, error) {
-					if (error) { onError(error); return; };
-
-					if (isEnd) onResult(null);
-					else onResult(new AsyncCoroutineValue(value, cor));
-				});
-
-				if (onFirstRun) onFirstRun(self);
-				if (onRequestValue) onRequestValue(self);
-			});
-		});
-
-		return firstCor;
-	};
+			if (valueWaiters.length) sync = true;
+			else { valueRequestedRunning = false; break; }
+		}
+	}
 }
 
 AsyncCoroutine.forEachSync = function(stream, fun) {

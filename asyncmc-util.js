@@ -74,7 +74,7 @@ function Stream(options) {
 		while (true) {
 			valueRequestedRunning = true;
 
-			onRequest().run(() => {
+			onRequest.call(self).run(() => {
 				if (sync) { sync = false; return; }
 
 				if (valueWaiters.length) callOnRequest();
@@ -93,6 +93,28 @@ function Stream(options) {
 		}
 	}
 }
+
+AsyncCoroutine.fromList = function(list) {
+	let index = 0;
+
+	let stream = new Stream({
+		onRequest() {
+			if (index >= list.length) {
+				stream.finish();
+				return AsyncM.result();
+			}
+
+			let item = list[index];
+			index++;
+
+			stream.push(item);
+
+			return AsyncM.result();
+		},
+	});
+
+	return stream.getAsyncCoroutine();
+};
 
 AsyncCoroutine.forEachSync = function(stream, fun) {
 	function go(stream) {

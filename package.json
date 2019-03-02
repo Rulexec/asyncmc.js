@@ -1,6 +1,6 @@
 {
   "name": "asyncmc",
-  "version": "0.0.2",
+  "version": "0.0.4",
   "description": "",
   "main": "index.js",
   "directories": {
@@ -8,6 +8,7 @@
   "scripts": {
   },
   "author": "Alexander Ruliov <alexander.ruliov@gmail.com>",
-  "devDependencies": {
+  "peerDependencies": {
+    "asyncm": "1.x.x"
   }
 }

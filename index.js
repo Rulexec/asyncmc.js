@@ -10,6 +10,8 @@ if (typeof module !== 'undefined') {
 	window.AsyncCoroutine = AsyncCoroutine;
 }
 
+// TODO: eliminate `arguments`, pass only one argument
+
 function AsyncCoroutineValue(value, asyncCoroutine) {
 	if (!(this instanceof AsyncCoroutineValue)) throw new Error();
 
@@ -170,6 +172,60 @@ function AsyncCoroutine(run) {
 
 		return this.next().result(handleStream.bind(null, initState));
 	};
+	this.forEach = function(fun) {
+		function handleStream(cor) {
+			if (!cor) return M.result();
+
+			if (cor.next) {
+				fun(cor.value);
+				return cor.next.next().result(handleStream);
+			} else {
+				return M.result();
+			}
+		}
+
+		return this.next().result(handleStream);
+	};
+	this.forEachUntil = function(fun) {
+		function handleStream(cor) {
+			if (!cor) return M.result({ rest: null, value: null });
+
+			if (cor.next) {
+				let found = fun(cor.value);
+
+				if (found) {
+					return M.result({
+						rest: cor.next,
+						value: found,
+					});
+				} else {
+					return cor.next.next().result(handleStream);
+				}
+			} else {
+				return M.result({
+					rest: null,
+					value: null,
+				});
+			}
+		}
+
+		return this.next().result(handleStream);
+	};
+	this.forEachM = function(fun) {
+		function handleStream(cor) {
+			if (!cor) return M.result();
+
+			if (cor.next) {
+				return fun(cor.value).result(() => {
+					return cor.next.next().result(handleStream);
+				});
+			} else {
+				return M.result();
+			}
+		}
+
+		return this.next().result(handleStream);
+	};
 	// Returns Async<E, R>, reducer: (R, T) → Async<E, R>, initState: R
 	this.reduceStreamM = function(reducer, initState) {
 		function handleStream(state, cor) {
@@ -194,6 +250,31 @@ function AsyncCoroutine(run) {
 
 		return this.next().result(handleStream.bind(null, initState));
 	};
+
+	this.error = function(fun) {
+		return wrap(run);
+
+		function wrap(run) {
+			return new AsyncCoroutine(function(arg) {
+				return run(arg).next(transforming, onError);
+
+				function transforming(cor) {
+					if (!cor || !cor.next) return M.result();
+
+					return M.result(new AsyncCoroutineValue(cor.value, wrap(cor.next.next)));
+
+					function next(arg) {
+						console.log('next', arg);
+						return cor.next.next(arg).next(transforming, onError);
+					}
+				}
+				function onError(error, errorData) {
+					// Should not return result
+					return fun(error, errorData);
+				}
+			});
+		}
+	};
 }
 AsyncCoroutine.Value = AsyncCoroutineValue;
 
@@ -202,6 +283,9 @@ AsyncCoroutine.empty = function generatorEmpty() {
 };
 AsyncCoroutine.single = function generatorSingle(x) {
 	return new AsyncCoroutine(function() { return M.result(new AsyncCoroutineValue(x, null)); });
+};
+AsyncCoroutine.error = function generatorError(x) {
+	return new AsyncCoroutine(function() { return M.error(x); });
 };
 
 AsyncCoroutine.fromArray = function generatorFromArray(array) {

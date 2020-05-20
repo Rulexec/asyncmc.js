@@ -1,4 +1,4 @@
-/* globals window:false, M:false */
+/* globals window:false, M:false, AsyncM:false */
 
 (function(M){
 
@@ -19,6 +19,17 @@ function AsyncCoroutineValue(value, asyncCoroutine) {
 	this.next = asyncCoroutine;
 }
 function AsyncCoroutine(run) {
+	let _run = run;
+	run = function() {
+		let m = _run.apply(null, arguments);
+		return m.result(cor => {
+			if (!cor) return;
+			if (cor.next) return;
+
+			return M.result(new AsyncCoroutineValue(cor.value, AsyncCoroutine.empty()));
+		});
+	};
+
 	this.next = run;
 	// When stream is over, continues stream with f(x):Stream,
 	// where `x` is last stream value,
@@ -216,7 +227,9 @@ function AsyncCoroutine(run) {
 			if (!cor) return M.result();
 
 			if (cor.next) {
-				return fun(cor.value).result(() => {
+				let m = fun(cor.value);
+				if (!M.isM(m)) m = M.result(m);
+				return m.result(() => {
 					return cor.next.next().result(handleStream);
 				});
 			} else {
@@ -262,11 +275,6 @@ function AsyncCoroutine(run) {
 					if (!cor || !cor.next) return M.result();
 
 					return M.result(new AsyncCoroutineValue(cor.value, wrap(cor.next.next)));
-
-					function next(arg) {
-						console.log('next', arg);
-						return cor.next.next(arg).next(transforming, onError);
-					}
 				}
 				function onError(error, errorData) {
 					// Should not return result

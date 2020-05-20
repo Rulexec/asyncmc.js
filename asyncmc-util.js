@@ -103,6 +103,7 @@ function Stream(options) {
 		let sync = true;
 
 		while (true) {
+			// eslint-disable-next-line no-loop-func
 			valueRequestedRunning = onRequest.call(self).run(() => {
 				if (sync) { sync = false; return; }
 
@@ -230,7 +231,7 @@ AsyncCoroutine.fromM = function(m) {
 	});
 };
 
-AsyncCoroutine.forEachSync = function(stream, fun) {
+/*AsyncCoroutine.forEachSync = function(stream, fun) {
 	function go(stream) {
 		return stream.next().result(cor => {
 			if (!cor) return AsyncM.result();
@@ -246,7 +247,7 @@ AsyncCoroutine.forEachSync = function(stream, fun) {
 			});
 		});
 	}
-};
+};*/
 
 AsyncCoroutine.intervals = function(start, end, step) {
 	return new AsyncCoroutine(generator.bind(null, start));

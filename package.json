@@ -1,14 +1,12 @@
 {
-  "name": "asyncmc",
-  "version": "0.0.5",
-  "description": "",
-  "main": "index.js",
-  "directories": {
-  },
-  "scripts": {
-  },
-  "author": "Alexander Ruliov <alexander.ruliov@gmail.com>",
-  "peerDependencies": {
-    "asyncm": "1.x.x"
-  }
+	"name": "asyncmc",
+	"version": "0.0.6",
+	"description": "",
+	"main": "index.js",
+	"directories": {},
+	"scripts": {},
+	"author": "Alexander Ruliov <alexander.ruliov@gmail.com>",
+	"dependencies": {
+		"asyncm": "^1.0.14"
+	}
 }
